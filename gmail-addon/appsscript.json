@@ -1,0 +1,29 @@
+{
+  "timeZone": "America/New_York",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "gmail": {
+    "name": "PhishingShield AI",
+    "logoUrl": "https://your-domain.com/logo.png",
+    "primaryColor": "#4299E1",
+    "secondaryColor": "#2B6CB0",
+    "version": "TRUSTED_TESTER_PUBLISHED",
+    "openLinkUrlPrefixes": [
+      "https://your-domain.com/"
+    ],
+    "universalActions": [{
+      "text": "Settings",
+      "runFunction": "showSettings"
+    }],
+    "contextualTriggers": [{
+      "unconditional": {},
+      "onTriggerFunction": "buildAddOn"
+    }]
+  }
+}
