@@ -3,6 +3,7 @@ export interface ScanResult {
   confidence: number;
   explanation: string;
   recommendations: string[];
+  riskFactors: string[];
 }
 
 export interface EmailData {
@@ -11,6 +12,8 @@ export interface EmailData {
   content: string;
   links: string[];
   attachments: string[];
+  timestamp?: string;
+  read?: boolean;
 }
 
 export interface WorkloadData {
