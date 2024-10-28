@@ -34,7 +34,6 @@ document.getElementById('toggleProtection').addEventListener('click', () => {
   chrome.storage.sync.set({ settings });
   updateUI();
   
-  // Notify content script of the change
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     chrome.tabs.sendMessage(tabs[0].id, { 
       action: 'toggleProtection',
@@ -56,5 +55,5 @@ document.getElementById('showWarnings').addEventListener('change', (e) => {
 
 // Open dashboard
 document.getElementById('openDashboard').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://your-dashboard-url.com' });
+  chrome.tabs.create({ url: 'https://phishingshield-ai.netlify.app' });
 });

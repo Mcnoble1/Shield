@@ -15,11 +15,29 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'updateStats') {
     chrome.storage.sync.get(['settings'], (result) => {
-      const settings = result.settings;
-      settings.emailsScanned += request.emailsScanned || 0;
-      settings.threatsBlocked += request.threatsBlocked || 0;
-      chrome.storage.sync.set({ settings });
+      const settings = result.settings || {
+        enabled: true,
+        autoScan: true,
+        showWarnings: true,
+        emailsScanned: 0,
+        threatsBlocked: 0
+      };
+
+      const newSettings = {
+        ...settings,
+        emailsScanned: settings.emailsScanned + (request.emailsScanned || 0),
+        threatsBlocked: settings.threatsBlocked + (request.threatsBlocked || 0)
+      };
+
+      chrome.storage.sync.set({ settings: newSettings }, () => {
+        updateBadge(newSettings.threatsBlocked);
+        // Send response to confirm update
+        sendResponse({ success: true });
+      });
     });
+
+    // Return true to indicate we'll send a response asynchronously
+    return true;
   }
 });
 
@@ -32,11 +50,3 @@ function updateBadge(threatsBlocked) {
     chrome.action.setBadgeText({ text: '' });
   }
 }
-
-// Listen for storage changes
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.settings) {
-    const settings = changes.settings.newValue;
-    updateBadge(settings.threatsBlocked);
-  }
-});

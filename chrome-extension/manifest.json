@@ -6,11 +6,18 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting",
-    "https://mail.google.com/*"
+    "scripting"
   ],
   "host_permissions": [
-    "https://mail.google.com/*"
+    "https://mail.google.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["config.js", "contentScript.js"],
+      "css": ["styles.css"]
+    }
   ],
   "action": {
     "default_popup": "popup.html",
@@ -25,13 +32,6 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "content_scripts": [
-    {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["contentScript.js"],
-      "css": ["styles.css"]
-    }
-  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

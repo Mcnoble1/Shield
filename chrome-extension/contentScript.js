@@ -1,3 +1,11 @@
+// Import Gemini AI library
+const script = document.createElement('script');
+script.src = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro';
+document.head.appendChild(script);
+
+// Initialize Gemini AI using the config
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
 // Inject warning banner styles
 const style = document.createElement('style');
 style.textContent = `
@@ -34,6 +42,8 @@ style.textContent = `
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
   }
 
   .warning-btn.block {
@@ -41,10 +51,18 @@ style.textContent = `
     color: white;
   }
 
+  .warning-btn.block:hover {
+    background: #9b2c2c;
+  }
+
   .warning-btn.trust {
-    background: #white;
+    background: white;
     border: 1px solid #c53030;
     color: #c53030;
+  }
+
+  .warning-btn.trust:hover {
+    background: #fff5f5;
   }
 `;
 document.head.appendChild(style);
@@ -66,22 +84,70 @@ chrome.storage.sync.get(['settings'], (result) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'toggleProtection') {
     settings.enabled = request.enabled;
+    sendResponse({ success: true });
+    return true;
   }
 });
 
-// Scan email content
-async function scanEmail(emailContent) {
+// Extract email data from Gmail interface
+function extractEmailData() {
+  const emailContainer = document.querySelector('.gs');
+  if (!emailContainer) return null;
+
+  const sender = emailContainer.querySelector('.gD')?.getAttribute('email') || '';
+  const subject = emailContainer.querySelector('.hP')?.textContent || '';
+  const content = emailContainer.querySelector('.a3s')?.textContent || '';
+  
+  // Extract links
+  const links = Array.from(emailContainer.querySelectorAll('a'))
+    .map(a => a.href)
+    .filter(href => href?.startsWith('http') || false);
+
+  // Extract attachments
+  const attachments = Array.from(emailContainer.querySelectorAll('.aZo'))
+    .map(att => att.getAttribute('download'))
+    .filter(Boolean);
+
+  return {
+    sender,
+    subject,
+    content,
+    links,
+    attachments
+  };
+}
+
+// Scan email using Gemini AI
+async function scanEmail(emailData) {
   try {
-    const response = await fetch('https://your-api-endpoint.com/scan', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content: emailContent })
-    });
-    
-    const result = await response.json();
-    return result;
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+
+    const prompt = `
+      Analyze this email for phishing indicators:
+      From: ${emailData.sender}
+      Subject: ${emailData.subject}
+      Content: ${emailData.content}
+      Links: ${emailData.links.join(', ')}
+      Attachments: ${emailData.attachments.join(', ')}
+
+      Provide a detailed analysis including:
+      1. Is this likely a phishing attempt?
+      2. Confidence level (0-100)
+      3. Explanation of findings
+      4. Security recommendations
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // Parse AI response
+    return {
+      isPhishing: text.toLowerCase().includes('phishing'),
+      confidence: text.toLowerCase().includes('high confidence') ? 90 : 70,
+      explanation: text.split('\n')[0],
+      recommendations: text.split('\n').slice(1).filter(Boolean)
+    };
   } catch (error) {
     console.error('Error scanning email:', error);
     return null;
@@ -96,10 +162,14 @@ function showWarningBanner(result) {
     <svg class="warning-icon" viewBox="0 0 20 20" fill="currentColor">
       <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
     </svg>
-    <span>Potential phishing attempt detected! ${result.explanation}</span>
+    <span>
+      <strong>Warning:</strong> ${result.explanation}
+      <br>
+      <small>Confidence: ${result.confidence}%</small>
+    </span>
     <div class="warning-actions">
-      <button class="warning-btn block">Block</button>
-      <button class="warning-btn trust">Trust</button>
+      <button class="warning-btn block">Block Sender</button>
+      <button class="warning-btn trust">Trust Email</button>
     </div>
   `;
   
@@ -107,8 +177,15 @@ function showWarningBanner(result) {
   
   // Handle button clicks
   banner.querySelector('.block').addEventListener('click', () => {
-    // Implement blocking logic
-    banner.remove();
+    chrome.runtime.sendMessage({
+      action: 'updateStats',
+      threatsBlocked: 1
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error updating stats:', chrome.runtime.lastError);
+      }
+      banner.remove();
+    });
   });
   
   banner.querySelector('.trust').addEventListener('click', () => {
@@ -117,22 +194,34 @@ function showWarningBanner(result) {
 }
 
 // Monitor for new emails
-const observer = new MutationObserver((mutations) => {
+const observer = new MutationObserver(async (mutations) => {
   if (!settings.enabled || !settings.autoScan) return;
   
   mutations.forEach(mutation => {
     mutation.addedNodes.forEach(async node => {
-      if (node.nodeType === Node.ELEMENT_NODE && node.matches('.email-content')) {
-        const result = await scanEmail(node.textContent);
-        if (result && result.isPhishing && settings.showWarnings) {
-          showWarningBanner(result);
+      if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('gs')) {
+        const emailData = extractEmailData();
+        if (emailData) {
+          chrome.runtime.sendMessage({
+            action: 'updateStats',
+            emailsScanned: 1
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('Error updating stats:', chrome.runtime.lastError);
+            }
+          });
+
+          const result = await scanEmail(emailData);
+          if (result && result.isPhishing && settings.showWarnings) {
+            showWarningBanner(result);
+          }
         }
       }
     });
   });
 });
 
-// Start observing
+// Start observing Gmail interface
 observer.observe(document.body, {
   childList: true,
   subtree: true
