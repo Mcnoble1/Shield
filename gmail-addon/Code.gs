@@ -4,8 +4,9 @@
  * @return {Card} The card to show to the user.
  */
 function buildAddOn(e) {
-  const messageId = e.messageMetadata.messageId;
   const accessToken = e.messageMetadata.accessToken;
+  GmailApp.setCurrentMessageAccessToken(accessToken);
+  const messageId = e.messageMetadata.messageId;
   const message = GmailApp.getMessageById(messageId);
   
   // Extract email data
@@ -26,7 +27,7 @@ function buildAddOn(e) {
   // Header
   card.setHeader(CardService.newCardHeader()
     .setTitle('PhishingShield AI')
-    .setImageUrl('https://your-domain.com/logo.png'));
+    .setImageUrl('https://res.cloudinary.com/mcnoble/image/upload/v1731327309/shield_c3wcde.png'));
   
   // Analysis section
   const analysisSection = CardService.newCardSection()
@@ -101,16 +102,35 @@ function extractLinks(html) {
  * @return {Object} Analysis results
  */
 function analyzeEmail(emailData) {
-  const apiUrl = 'https://your-api-endpoint.com/scan';
+  // Replace with your deployed API endpoint
+  const apiUrl = PropertiesService.getScriptProperties().getProperty('API_ENDPOINT');
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  
   const options = {
     method: 'post',
     contentType: 'application/json',
-    payload: JSON.stringify(emailData)
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    },
+    payload: JSON.stringify(emailData),
+    muteHttpExceptions: true
   };
   
   try {
     const response = UrlFetchApp.fetch(apiUrl, options);
-    return JSON.parse(response.getContentText());
+    const responseCode = response.getResponseCode();
+    
+    if (responseCode === 200) {
+      return JSON.parse(response.getContentText());
+    } else {
+      console.error('API Error:', response.getContentText());
+      return {
+        isPhishing: false,
+        confidence: 0,
+        explanation: 'Error analyzing email',
+        recommendations: ['Unable to complete analysis']
+      };
+    }
   } catch (error) {
     console.error('API Error:', error);
     return {
